@@ -7,6 +7,7 @@ import datasets
 import evaluate
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 
 def regions_to_string(regions):
@@ -47,11 +48,17 @@ def expand_suite(suite: datasets.Dataset, max_length,
         item = deepcopy(item)
         item["conditions"]["content"].insert(0, "")
         for region in item["conditions"]["regions"]:
-            region["region_number"].insert(0, 0)
+            region["region_number"] = [1] + [x + 1 for x in region["region_number"]]
             region["content"].insert(0, "")
 
         # Also prepare to track accumulated items in the prefix.
         item["used_item_numbers"] = [item["item_number"]]
+
+        # Update predictions to account for shifted region number.
+        item["predictions"] = [
+            re.sub(r"(\d+)", lambda match: str(int(match.group(1)) + 1), prediction_formula)
+            for prediction_formula in item["predictions"]
+        ]
 
         items.append(item)
 
