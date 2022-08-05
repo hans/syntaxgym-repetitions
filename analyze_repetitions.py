@@ -112,7 +112,7 @@ def expand_suite(suite: datasets.Dataset, max_length,
 
 
 def main(args):
-    suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)
+    suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)["test"]
 
     # TODO generalize
     grammatical_conditions = ["match_sing", "match_plural"]
@@ -122,20 +122,20 @@ def main(args):
                             target_size=args.target_size, subsample_pct=args.subsample_pct)
 
     metric = evaluate.load("cpllab/syntaxgym")
-    result = metric.compute(dataset=expanded["test"], model_id=args.model_id)[args.suite]
+    result = metric.compute(dataset=expanded, model_id=args.model_id)[args.suite]
 
     prediction_df = pd.DataFrame(result.prediction_results)
-    prediction_df.index = expanded["test"]["item_number"]
+    prediction_df.index = expanded["item_number"]
     prediction_df.index.name = "item_number"
     prediction_df.to_csv(args.output_file + ".predictions.csv")
 
     regions_df = pd.DataFrame(result.region_totals)
-    regions_df.index = expanded["test"]["item_number"]
+    regions_df.index = expanded["item_number"]
     regions_df.index.name = "item_number"
     regions_df = regions_df.reset_index().melt(id_vars=["item_number"])
     regions_df["condition"], regions_df["region_number"] = regions_df["variable"].str
     regions_df.drop("variable", axis=1, inplace=True)
-    regions_df.to_csv(args.output_file + ".regions.csv")
+    regions_df.to_csv(args.output_file + ".regions.csv", index=False)
 
 
 if __name__ == "__main__":
