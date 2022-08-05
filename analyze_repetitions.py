@@ -6,7 +6,7 @@ import re
 import datasets
 import evaluate
 import numpy as np
-from pkg_resources import compatible_platforms
+import pandas as pd
 
 
 def regions_to_string(regions):
@@ -103,10 +103,49 @@ def expand_suite(suite: datasets.Dataset, max_length,
 
         items = items_next
 
-    # TODO fix item numbers
+    # Update item numbers to be unique.
+    ret_dataset = datasets.concatenate_datasets([suite] + new_datasets)
+    for idx, item in enumerate(ret_dataset):
+        item["item_number"] = idx + 1
 
-    return datasets.concatenate_datasets([suite] + new_datasets)
+    return ret_dataset
 
 
 def main(args):
-    pass
+    suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)
+
+    # TODO generalize
+    grammatical_conditions = ["match_sing", "match_plural"]
+    ungrammatical_conditions = ["mismatch_sing", "mismatch_plural"]
+
+    expanded = expand_suite(suite, args.max_length, grammatical_conditions, ungrammatical_conditions,
+                            target_size=args.target_size, subsample_pct=args.subsample_pct)
+
+    metric = evaluate.load("cpllab/syntaxgym")
+    result = metric.compute(dataset=expanded["test"], model_id=args.model_id)[args.suite]
+
+    prediction_df = pd.DataFrame(result.prediction_results)
+    prediction_df.index = expanded["test"]["item_number"]
+    prediction_df.index.name = "item_number"
+    prediction_df.to_csv(args.output_file + ".predictions.csv")
+
+    regions_df = pd.DataFrame(result.region_totals)
+    regions_df.index = expanded["test"]["item_number"]
+    regions_df.index.name = "item_number"
+    regions_df = regions_df.reset_index().melt(id_vars=["item_number"])
+    regions_df["condition"], regions_df["region_number"] = regions_df["variable"].str
+    regions_df.drop("variable", axis=1, inplace=True)
+    regions_df.to_csv(args.output_file + ".regions.csv")
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--suite", default="number_prep")
+    parser.add_argument("--max-length", type=int, default=40)
+    parser.add_argument("--target-size", type=int, default=1000)
+    parser.add_argument("--subsample-pct", type=float, default=None)
+    parser.add_argument("-m", "--model-id", default="gpt2")
+    parser.add_argument("-o", "--output-file", required=True)
+    args = parser.parse_args()
+
+    main(args)
