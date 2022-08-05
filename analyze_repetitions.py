@@ -4,7 +4,6 @@ import itertools
 import re
 
 import datasets
-from datasets.table import InMemoryTable, concat_tables
 import evaluate
 import numpy as np
 from pkg_resources import compatible_platforms
@@ -17,37 +16,6 @@ def regions_to_string(regions):
     ret = re.sub(r"\s+([.,])", r"\1", ret)
 
     return ret
-
-
-
-def add_dataset_batch(dataset: datasets.Dataset,
-                      new_items):
-    item_table = InMemoryTable.from_pydict({k: [v] for k, v in item.items()})
-    # # We don't call _check_if_features_can_be_aligned here so this cast is "unsafe"
-    # dset_features, item_features = _align_features([self.features, Features.from_arrow_schema(item_table.schema)])
-    # Cast to align the schemas of the tables and concatenate the tables
-    table = concat_tables(
-        [
-            self._data.cast(dset_features.arrow_schema) if self.features != dset_features else self._data,
-            item_table.cast(item_features.arrow_schema),
-        ]
-    )
-    if self._indices is None:
-        indices_table = None
-    else:
-        item_indices_array = pa.array([len(self._data)], type=pa.uint64())
-        item_indices_table = InMemoryTable.from_arrays([item_indices_array], names=["indices"])
-        indices_table = concat_tables([self._indices, item_indices_table])
-    info = self.info.copy()
-    info.features.update(item_features)
-    table = update_metadata_with_features(table, info.features)
-    return Dataset(
-        table,
-        info=info,
-        split=self.split,
-        indices_table=indices_table,
-        fingerprint=new_fingerprint,
-    )
 
 
 def expand_suite(suite: datasets.Dataset, max_length,
@@ -70,7 +38,7 @@ def expand_suite(suite: datasets.Dataset, max_length,
                                 item["conditions"]["content"]))
         for cond in grammatical_conditions:
             grammatical_sentences.append((item["item_number"], sentence_map[cond]))
-        
+
     grammatical_sentence_lengths = np.array([sentence.count(" ") + 1 for _, sentence in grammatical_sentences])
 
     # Add empty prefix region to each item.
