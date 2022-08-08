@@ -9,10 +9,13 @@ library(lme4)
 library(lmerTest)
 ```
 
+```{r}
+SUITE = "number_prep"
+```
+
 
 ```{r}
-predictions_df <- read_csv("number_src.predictions.csv")
-
+predictions_df <- read_csv(paste0(SUITE, ".predictions.csv"))
 glimpse(predictions_df)
 ```
 
@@ -22,33 +25,37 @@ predictions_df = predictions_df %>%
 ```
 
 ```{r}
-binned_test_items = predictions_df %>% 
-  filter(prefix_length > 0) %>% 
-  mutate(length_bin=cut_interval(prefix_length, 5))
-
-predictions_df %>% filter(prefix_length == 0) %>% mutate(length_bin="(") %>% rbind(binned_test_items) %>% 
-  group_by(length_bin) %>% 
-    summarise(acc=mean(prediction_0), std=sd(prediction_0)/sqrt(n())) %>% 
-  ggplot(aes(x=length_bin, y=acc, group=1)) +
-    geom_line() +
-    geom_ribbon(aes(ymin=acc-std, ymax=acc+std), alpha=0.2)
-```
-```{r}
-predictions_df %>%
-  mutate(num_prefix_sentences=ifelse(is.na(used_conditions), 0, str_count(used_conditions, " ") + 1)) %>%
-  group_by(num_prefix_sentences) %>% 
-    summarise(acc=mean(prediction_0), se=sd(prediction_0)/sqrt(n())) %>% 
-  ggplot(aes(x=num_prefix_sentences, y=acc, group=1)) +
-    geom_line() +
-    geom_ribbon(aes(ymin=acc-se, ymax=acc+se), alpha=0.2)
-```
-
-
-```{r}
-lm = glmer(prediction_0 ~ prefix_length + (prefix_length | first_item_number),
+lm = glmer(prediction_0 ~ log(prefix_length + 1) + (log(prefix_length + 1) | first_item_number),
            family=binomial, data=predictions_df)
 summary(lm)
 ```
+```{r}
+ranef(lm)
+```
+
+
+```{r}
+#region_df = read_csv(paste0(SUITE, ".regions.csv"))
+#glimpse(region_df)
+region_df = rbind(read_csv("number_prep.regions.csv"), read_csv("number_prep2.regions.csv"))
+glimpse(region_df)
+```
+
+```{r}
+crit_region_data = region_df %>% 
+  left_join(predictions_df %>% select(c(item_number, prefix_length, first_item_number)), by="item_number") %>% 
+  filter(region_number == 7) %>% 
+  mutate(grammatical=!grepl("mismatch", condition),
+         feature=str_extract(condition, "_(.+)$"))
+```
+
+```{r}
+contrasts(crit_region_data$grammatical) = c(-1, 1)
+lm = lmer(value ~ grammatical * log(prefix_length + 1) + (1 | first_item_number) + (1 | feature), data=crit_region_data,
+          control=lmerControl(optimizer="bobyqa", optCtrl=list(maxfun=100000)))
+summary(lm)
+```
+
 ```{r}
 ranef(lm)
 ```
