@@ -1,0 +1,55 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+```
+
+
+```{r}
+predictions_df <- read_csv("number_src.predictions.csv")
+
+glimpse(predictions_df)
+```
+
+```{r}
+predictions_df = predictions_df %>% 
+  mutate(first_item_number=str_extract(used_item_numbers, "^(\\d+)"))
+```
+
+```{r}
+binned_test_items = predictions_df %>% 
+  filter(prefix_length > 0) %>% 
+  mutate(length_bin=cut_interval(prefix_length, 5))
+
+predictions_df %>% filter(prefix_length == 0) %>% mutate(length_bin="(") %>% rbind(binned_test_items) %>% 
+  group_by(length_bin) %>% 
+    summarise(acc=mean(prediction_0), std=sd(prediction_0)/sqrt(n())) %>% 
+  ggplot(aes(x=length_bin, y=acc, group=1)) +
+    geom_line() +
+    geom_ribbon(aes(ymin=acc-std, ymax=acc+std), alpha=0.2)
+```
+```{r}
+predictions_df %>%
+  mutate(num_prefix_sentences=ifelse(is.na(used_conditions), 0, str_count(used_conditions, " ") + 1)) %>%
+  group_by(num_prefix_sentences) %>% 
+    summarise(acc=mean(prediction_0), se=sd(prediction_0)/sqrt(n())) %>% 
+  ggplot(aes(x=num_prefix_sentences, y=acc, group=1)) +
+    geom_line() +
+    geom_ribbon(aes(ymin=acc-se, ymax=acc+se), alpha=0.2)
+```
+
+
+```{r}
+lm = glmer(prediction_0 ~ prefix_length + (prefix_length | first_item_number),
+           family=binomial, data=predictions_df)
+summary(lm)
+```
+```{r}
+ranef(lm)
+```
+

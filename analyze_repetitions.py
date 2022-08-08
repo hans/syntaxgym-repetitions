@@ -97,7 +97,7 @@ def expand_suite(suite: datasets.Dataset, max_length,
             for prefix_item_idx, prefix_cond, prefix_sentence, prefix_length in compatible_prefixes:
                 # Add prefix sentence to item.
                 ret = deepcopy(item)
-                ret["item_number"] = acc_dataset_size
+                ret["item_number"] = acc_dataset_size + 1
 
                 for cond_name, cond_regions in zip(condition_names, ret["conditions"]["regions"]):
                     additional_prefix = prefix_sentence + ". " if cond_regions["content"][0] != "" else prefix_sentence + "."
@@ -107,7 +107,7 @@ def expand_suite(suite: datasets.Dataset, max_length,
                         for regions in ret["conditions"]["regions"]]
                 ret["used_item_numbers"].append(prefix_item_idx)
                 ret["used_conditions"].append(prefix_cond)
-                ret["prefix_length"] = prefix_length
+                ret["prefix_length"] += prefix_length
 
                 acc_dataset_size += 1
                 items_next.append(ret)
