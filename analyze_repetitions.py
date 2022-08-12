@@ -61,13 +61,14 @@ def expand_suite(suite: datasets.Dataset, max_length,
             re.sub(r"(\d+)", lambda match: str(int(match.group(1)) + 1), prediction_formula)
             for prediction_formula in item["predictions"]
         ]
-        
+
         return item
 
     suite = suite.map(add_empty_region)
 
     new_datasets = []
     acc_dataset_size = len(suite)
+    items = list(suite)
     while acc_dataset_size < target_size and len(items) > 0:
         items_next = []
 
