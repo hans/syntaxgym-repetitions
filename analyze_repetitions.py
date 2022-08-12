@@ -48,32 +48,23 @@ def expand_suite(suite: datasets.Dataset, max_length,
     suite = suite.add_column("used_item_numbers", [[item["item_number"]] for item in suite])
     suite = suite.add_column("used_conditions", [[""] for item in suite])
 
-    # Add empty prefix region to each item.
-    items = []
-    for item in suite:
-        item = deepcopy(item)
-        item["conditions"]["content"].insert(0, "")
+    def add_empty_region(item):
+        """
+        Add an empty prefix region to the given item.
+        """
         for region in item["conditions"]["regions"]:
             region["region_number"] = [1] + [x + 1 for x in region["region_number"]]
             region["content"].insert(0, "")
-
-        # # Also prepare to track accumulated items in the prefix.
-        # item["used_item_numbers"] = [item["item_number"]]
 
         # Update predictions to account for shifted region number.
         item["predictions"] = [
             re.sub(r"(\d+)", lambda match: str(int(match.group(1)) + 1), prediction_formula)
             for prediction_formula in item["predictions"]
         ]
+        
+        return item
 
-        items.append(item)
-
-    expanded_dataset_features = deepcopy(suite.features)
-    expanded_dataset_features["prefix_length"] = datasets.Value("int64")
-    expanded_dataset_features["used_item_numbers"] = datasets.Sequence(datasets.Value("int64"))
-    expanded_dataset_features["used_conditions"] = datasets.Sequence(datasets.Value("string"))
-    expanded_dataset_features = datasets.Features(expanded_dataset_features)
-    expanded_features = set(expanded_dataset_features.keys()) - set(suite.features.keys())
+    suite = suite.map(add_empty_region)
 
     new_datasets = []
     acc_dataset_size = len(suite)
