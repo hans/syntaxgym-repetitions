@@ -7,6 +7,7 @@ import datasets
 import evaluate
 import numpy as np
 import pandas as pd
+import torch
 from tqdm.auto import tqdm
 
 
@@ -127,6 +128,8 @@ def expand_suite(suite: datasets.Dataset, max_length,
 
 
 def main(args):
+    print("Running with device: ", args.device)
+
     suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)["test"]
 
     # TODO generalize
@@ -140,7 +143,8 @@ def main(args):
     expanded_input = expanded.map(remove_columns=["used_item_numbers", "used_conditions", "prefix_length"])
 
     metric = evaluate.load("cpllab/syntaxgym")
-    result = metric.compute(dataset=expanded_input, model_id=args.model_id)[args.suite]
+    result = metric.compute(dataset=expanded_input, model_id=args.model_id,
+                            batch_size=32)[args.suite]
 
     # # DEV
     # from collections import namedtuple
@@ -179,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument("--subsample-pct", type=float, default=None)
     parser.add_argument("-m", "--model-id", default="gpt2")
     parser.add_argument("-o", "--output-file", required=True)
+    parser.add_argument("-d", "--device", default="gpu" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
     main(args)
