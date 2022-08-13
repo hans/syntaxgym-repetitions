@@ -123,64 +123,6 @@ def expand_suite(suite: datasets.Dataset, target_length,
 
         new_items.append(item)
 
-    # new_datasets = []
-    # acc_dataset_size = len(suite)
-    # items = list(suite)
-    # longest_sentence = 0
-    # # while acc_dataset_size < target_size and len(items) > 0:
-    # while longest_sentence < max_length and len(items) > 0:
-    #     items_next = []
-
-    #     for item in tqdm(items):
-    #         item_sentence_maxlen = max(content_str.count(" ") + 1
-    #             for content_str in item["conditions"]["content"])
-    #         longest_sentence = max(longest_sentence, item_sentence_maxlen)
-
-    #         compatible_prefixes = []
-    #         for (prefix_item_idx, prefix_cond, prefix_sentence), prefix_length in zip(grammatical_sentences, grammatical_sentence_lengths):
-    #             if prefix_item_idx in item["used_item_numbers"]:
-    #                 continue
-    #             if prefix_length + item_sentence_maxlen > max_length:
-    #                 continue
-    #             if subsample_pct is not None and np.random.random() >= subsample_pct:
-    #                 continue
-    #             compatible_prefixes.append((prefix_item_idx, prefix_cond, prefix_sentence, prefix_length))
-
-    #         for prefix_item_idx, prefix_cond, prefix_sentence, prefix_length in compatible_prefixes:
-    #             # Add prefix sentence to item.
-    #             ret = deepcopy(item)
-    #             ret["item_number"] = acc_dataset_size + 1
-
-    #             for cond_name, cond_regions in zip(condition_names, ret["conditions"]["regions"]):
-    #                 additional_prefix = prefix_sentence + ". " if cond_regions["content"][0] != "" else prefix_sentence + "."
-    #                 cond_regions["content"][0] = additional_prefix + cond_regions["content"][0]
-
-    #             ret["conditions"]["content"] = [regions_to_string(regions)
-    #                     for regions in ret["conditions"]["regions"]]
-    #             ret["used_item_numbers"].append(prefix_item_idx)
-    #             ret["used_conditions"].append(prefix_cond)
-    #             ret["prefix_length"] += prefix_length
-
-    #             acc_dataset_size += 1
-    #             items_next.append(ret)
-
-    #         # # Early exit
-    #         # if acc_dataset_size + len(items_next) > target_size:
-    #         #     break
-
-    #     new_dataset_dict = {
-    #         feature: [item[feature] for item in items_next]
-    #         for feature in suite.features
-    #     }
-    #     new_dataset = datasets.Dataset.from_dict(new_dataset_dict,
-    #         info=suite.info,
-    #         split=suite.split)
-
-    #     new_datasets.append(new_dataset)
-    #     acc_dataset_size += len(new_dataset)
-
-    #     items = items_next
-
     new_dataset = datasets.Dataset.from_dict(
         {feature: [item[feature] for item in new_items]
          for feature in suite.features},
