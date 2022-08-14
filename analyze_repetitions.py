@@ -145,10 +145,14 @@ def main(args):
     suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)["test"]
 
     # TODO generalize
-    grammatical_conditions = ["match_sing", "match_plural"]
-    ungrammatical_conditions = ["mismatch_sing", "mismatch_plural"]
+    grammatical_conditions = {
+        "number": ["match_sing", "match_plural"],
+        "reflexive": ["match_sing", "match_plural"],
+        "subordination": ["no_sub-no_matrix", "sub_matrix"],
+    }
+    grammatical_conditions_suite = grammatical_conditions[args.suite.split("_")[0]]
 
-    expanded = expand_suite(suite, args.target_length, grammatical_conditions, ungrammatical_conditions,
+    expanded = expand_suite(suite, args.target_length, grammatical_conditions_suite, None,
                             target_size=args.target_size)
 
     # The input to the metric needs to match the expected feature spec.
