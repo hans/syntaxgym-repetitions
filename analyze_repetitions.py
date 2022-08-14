@@ -27,7 +27,7 @@ def expand_suite(suite: datasets.Dataset, target_length,
                  target_size=1000):
     """
     Expand the examples in an item to contain prefixes consisting of grammatical sentences
-    from other items. Expand until all inputs under `max_length` tokens (based on
+    from other items. Expand until all inputs under `target_length` tokens (based on
     whitespace split) are generated.
 
     Adds a single condition to the item storing the entire prefix content.
@@ -49,7 +49,7 @@ def expand_suite(suite: datasets.Dataset, target_length,
     grammatical_sentence_lengths = np.array([
         sentence.count(" ") + 1 for _, _, sentence in grammatical_sentences])
 
-    # About many prefixes will we need to reach max_length?
+    # About many prefixes will we need to reach target_length?
     num_prefixes = int(np.ceil(target_length / grammatical_sentence_lengths.mean()))
     max_possible_prefixes = len(suite) * 2 - 1
     if num_prefixes > max_possible_prefixes:
@@ -59,7 +59,7 @@ def expand_suite(suite: datasets.Dataset, target_length,
     num_samples_per_prefix = int(np.ceil(target_size / num_prefixes))
 
     results = []
-    for num_prefixes_i in trange(num_prefixes, desc="Prefix lengths"):
+    for num_prefixes_i in trange(1, num_prefixes, desc="Prefix lengths"):
         # Sample sentences to use in this prefix.
         item_sample = np.random.choice(
             range(len(suite)),
@@ -95,6 +95,13 @@ def expand_suite(suite: datasets.Dataset, target_length,
         item["predictions"] = [
             re.sub(r"(\d+)", lambda match: str(int(match.group(1)) + 1), prediction_formula)
             for prediction_formula in item["predictions"]
+        ]
+
+        # Also split conjunction predictions.
+        item["predictions"] = [
+            subprediction.strip()
+            for prediction in item["predictions"]
+            for subprediction in prediction.split("&")
         ]
 
         return item
@@ -141,7 +148,7 @@ def main(args):
     grammatical_conditions = ["match_sing", "match_plural"]
     ungrammatical_conditions = ["mismatch_sing", "mismatch_plural"]
 
-    expanded = expand_suite(suite, args.max_length, grammatical_conditions, ungrammatical_conditions,
+    expanded = expand_suite(suite, args.target_length, grammatical_conditions, ungrammatical_conditions,
                             target_size=args.target_size)
 
     # The input to the metric needs to match the expected feature spec.
