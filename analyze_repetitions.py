@@ -149,6 +149,8 @@ def main(args):
         "number": ["match_sing", "match_plural"],
         "reflexive": ["match_sing", "match_plural"],
         "subordination": ["no-sub_no-matrix", "sub_matrix"],
+        "mvrr": ["reduced_ambig", "unreduced_ambig", "reduced_unambig", "unreduced_unambig"],  # all are grammatical!
+        "fgd": ["that_nogap", "what_gap"],
     }
     grammatical_conditions_suite = grammatical_conditions[args.suite.split("_")[0]]
 
