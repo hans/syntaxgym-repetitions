@@ -148,7 +148,7 @@ def main(args):
     grammatical_conditions = {
         "number": ["match_sing", "match_plural"],
         "reflexive": ["match_sing", "match_plural"],
-        "subordination": ["no_sub-no_matrix", "sub_matrix"],
+        "subordination": ["no-sub_no-matrix", "sub_matrix"],
     }
     grammatical_conditions_suite = grammatical_conditions[args.suite.split("_")[0]]
 
