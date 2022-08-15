@@ -117,13 +117,13 @@ def expand_suite(suite: datasets.Dataset, target_length,
         item["item_number"] = acc + 1
         acc += 1
 
-        item["prefix_length"] = len(prefixes)
-        item["used_item_numbers"] = grammatical_sentence_item_numbers[prefixes]
-        item["used_conditions"] = [grammatical_sentences[idx][1] for idx in prefixes]
-
         prefix_str = ". ".join([grammatical_sentences[idx][2] for idx in prefixes]) + "."
         for cond_name, cond_regions in zip(condition_names, item["conditions"]["regions"]):
             cond_regions["content"][0] = prefix_str
+
+        item["prefix_length"] = len(prefix_str.split(" "))
+        item["used_item_numbers"] = grammatical_sentence_item_numbers[prefixes]
+        item["used_conditions"] = [grammatical_sentences[idx][1] for idx in prefixes]
 
         item["conditions"]["content"] = [
             regions_to_string(regions) for regions in item["conditions"]["regions"]]
