@@ -46,7 +46,8 @@ process evaluatePrefixes {
         --output-file ${suite}.${prefix_suite} \
         --target-length ${params.targetLength} \
         --target-size ${params.targetSize} \
-        --model-id ${params.modelId}
+        --model-id ${params.modelId} \
+        || echo "core dump probably"
 
     # Remove dumped core :(
     rm -f core*
