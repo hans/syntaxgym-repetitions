@@ -203,16 +203,6 @@ def main(args):
     result = metric.compute(dataset=expanded_input, model_id=args.model_id,
                             batch_size=32)[args.suite]
 
-    # # DEV
-    # from collections import namedtuple
-    # result_cls = namedtuple("result", ["suite_name", "prediction_results", "region_totals"])
-    # result = result_cls(args.suite,
-    #     [np.random.random() > 0.5 for _ in range(len(expanded))],
-    #     [{(cond, region_number): np.random.random()
-    #       for cond in item["conditions"]["condition_name"]
-    #       for region_number in item["conditions"]["regions"][0]["region_number"]}
-    #      for item in expanded])
-
     prefix_suite_name = args.prefix_suite if args.prefix_suite is not None else args.suite
 
     prediction_df = pd.DataFrame(
