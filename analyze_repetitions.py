@@ -81,7 +81,7 @@ def expand_suite(suite: datasets.Dataset,
 
     # About many prefixes will we need to reach target_length?
     num_prefixes = int(np.ceil(target_length / gr_lengths.mean()))
-    max_possible_prefixes = len(suite) * 2 - 1
+    max_possible_prefixes = len(other_suite) * 2 - 1
     if num_prefixes > max_possible_prefixes:
         warnings.warn(f"{num_prefixes} prefixes required to reach target length {target_length} "
                       f"but only {max_possible_prefixes} possible prefixes.")
@@ -105,7 +105,7 @@ def expand_suite(suite: datasets.Dataset,
                     raise RuntimeError(f"Not enough unique prefix items to make {num_prefixes_i} prefixes.")
                 candidate_prefix_items = np.where(possible_prefixes_mask)[0]
             else:
-                candidate_prefix_items = np.arange(len(other_suite))
+                candidate_prefix_items = np.arange(len(gr_sentences))
 
             prefixes = np.random.choice(candidate_prefix_items, size=num_prefixes_i, replace=False)
             results.append((prefixes, int(item_idx)))
@@ -189,8 +189,11 @@ def main(args):
         "fgd": ["that_nogap", "what_gap"],
     }
     grammatical_conditions_suite = grammatical_conditions[args.suite.split("_")[0]]
+    grammatical_conditions_prefix_suite = None if args.prefix_suite is None else \
+        grammatical_conditions[args.prefix_suite.split("_")[0]]
 
     expanded = expand_suite(suite, args.target_length, grammatical_conditions_suite, None,
+                            other_suite=prefix_suite, other_grammatical_conditions=grammatical_conditions_prefix_suite,
                             target_size=args.target_size)
 
     # The input to the metric needs to match the expected feature spec.
@@ -221,7 +224,7 @@ def main(args):
     prediction_df["prefix_suite"] = prefix_suite_name
     prediction_df.index = expanded["item_number"]
     prediction_df.index.name = "item_number"
-    prediction_df.to_csv(args.output_file + ".predictions.csv")
+    prediction_df.to_csv(f"{args.output_file}.predictions.csv")
 
     regions_df = pd.DataFrame(result.region_totals)
     regions_df.index = expanded["item_number"]
@@ -230,7 +233,7 @@ def main(args):
     regions_df["condition"], regions_df["region_number"] = regions_df["variable"].str
     regions_df["prefix_suite"] = prefix_suite_name
     regions_df.drop("variable", axis=1, inplace=True)
-    regions_df.to_csv(args.output_file + ".regions.csv", index=False)
+    regions_df.to_csv(f"{args.output_file}.regions.csv", index=False)
 
 
 if __name__ == "__main__":
