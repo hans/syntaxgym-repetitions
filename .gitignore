@@ -1,3 +1,7 @@
 *.csv
 __pycache__
 .ipynb_checkpoints
+
+.nextflow*
+work
+output
