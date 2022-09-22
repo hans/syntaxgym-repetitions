@@ -92,7 +92,7 @@ def expand_suite(suite: datasets.Dataset,
     for num_prefixes_i in trange(1, num_prefixes, desc="Prefix lengths"):
         # Sample sentences to use in this prefix.
         item_sample = np.random.choice(
-            range(len(other_suite)),
+            range(len(suite)),
             size=num_samples_per_prefix,
             replace=True)
 
