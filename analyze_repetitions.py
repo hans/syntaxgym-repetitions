@@ -2,6 +2,8 @@ from argparse import ArgumentParser
 from copy import deepcopy
 import itertools
 import re
+from readline import get_history_length
+from typing import Optional, List, Tuple, Dict, Any
 import warnings
 
 import datasets
@@ -22,17 +24,14 @@ def regions_to_string(regions):
     return ret
 
 
-def expand_suite(suite: datasets.Dataset, target_length,
-                 grammatical_conditions, ungrammatical_conditions,
-                 target_size=1000):
-    """
-    Expand the examples in an item to contain prefixes consisting of grammatical sentences
-    from other items. Expand until all inputs under `target_length` tokens (based on
-    whitespace split) are generated.
+ItemNumber = int
+ConditionName = str
 
-    Adds a single condition to the item storing the entire prefix content.
-    """
-
+def get_grammatical_sentences(suite: datasets.Dataset,
+                              grammatical_conditions: List[str],
+                              ) -> Tuple[np.ndarray,
+                                         List[Tuple[ItemNumber, ConditionName, str]],
+                                         np.ndarray]:
     condition_names = suite[0]["conditions"]["condition_name"]
 
     # Retrieve all grammatical sentences that could participate in prefix.
@@ -49,8 +48,39 @@ def expand_suite(suite: datasets.Dataset, target_length,
     grammatical_sentence_lengths = np.array([
         sentence.count(" ") + 1 for _, _, sentence in grammatical_sentences])
 
+    return (grammatical_sentence_item_numbers,
+            grammatical_sentences,
+            grammatical_sentence_lengths)
+
+
+def expand_suite(suite: datasets.Dataset,
+                 target_length: int,
+                 grammatical_conditions: List[str],
+                 ungrammatical_conditions: List[str],
+                 other_suite: Optional[datasets.Dataset] = None,
+                 other_grammatical_conditions: Optional[List[str]] = None,
+                 target_size=1000):
+    """
+    Expand the examples in an item to contain prefixes consisting of grammatical sentences
+    from other items from `other_suite`, or the same suite if `other_suite` is not specified.
+    Expand until all inputs under `target_length` tokens (based on whitespace split) are
+    generated.
+
+    Adds a single condition to the item storing the entire prefix content.
+    """
+
+    if other_suite is None:
+        expanding_self = True
+        other_suite = suite
+        other_grammatical_conditions = grammatical_conditions
+    else:
+        expanding_self = False
+        assert other_grammatical_conditions is not None, "Must specify grammatical conditions for other suite."
+    gr_numbers, gr_sentences, gr_lengths = get_grammatical_sentences(
+        other_suite, other_grammatical_conditions)
+
     # About many prefixes will we need to reach target_length?
-    num_prefixes = int(np.ceil(target_length / grammatical_sentence_lengths.mean()))
+    num_prefixes = int(np.ceil(target_length / gr_lengths.mean()))
     max_possible_prefixes = len(suite) * 2 - 1
     if num_prefixes > max_possible_prefixes:
         warnings.warn(f"{num_prefixes} prefixes required to reach target length {target_length} "
@@ -62,18 +92,22 @@ def expand_suite(suite: datasets.Dataset, target_length,
     for num_prefixes_i in trange(1, num_prefixes, desc="Prefix lengths"):
         # Sample sentences to use in this prefix.
         item_sample = np.random.choice(
-            range(len(suite)),
+            range(len(other_suite)),
             size=num_samples_per_prefix,
             replace=True)
 
         # Now sample prefix sentences for each item.
         for item_idx in item_sample:
-            # We can use prefix sentences from any other item.
-            possible_prefixes_mask = grammatical_sentence_item_numbers != item_idx
-            if possible_prefixes_mask.sum() < num_prefixes_i:
-                raise RuntimeError(f"Not enough unique prefix items to make {num_prefixes_i} prefixes.")
+            if expanding_self:
+                # Make sure we don't draw prefix sentences from the current item.
+                possible_prefixes_mask = gr_numbers != item_idx
+                if possible_prefixes_mask.sum() < num_prefixes_i:
+                    raise RuntimeError(f"Not enough unique prefix items to make {num_prefixes_i} prefixes.")
+                candidate_prefix_items = np.where(possible_prefixes_mask)[0]
+            else:
+                candidate_prefix_items = np.arange(len(other_suite))
 
-            prefixes = np.random.choice(np.where(possible_prefixes_mask)[0], size=num_prefixes_i, replace=False)
+            prefixes = np.random.choice(candidate_prefix_items, size=num_prefixes_i, replace=False)
             results.append((prefixes, int(item_idx)))
 
     #########
@@ -117,13 +151,13 @@ def expand_suite(suite: datasets.Dataset, target_length,
         item["item_number"] = acc + 1
         acc += 1
 
-        prefix_str = ". ".join([grammatical_sentences[idx][2] for idx in prefixes]) + "."
-        for cond_name, cond_regions in zip(condition_names, item["conditions"]["regions"]):
+        prefix_str = ". ".join([gr_sentences[idx][2] for idx in prefixes]) + "."
+        for cond_regions in item["conditions"]["regions"]:
             cond_regions["content"][0] = prefix_str
 
         item["prefix_length"] = len(prefix_str.split(" "))
-        item["used_item_numbers"] = grammatical_sentence_item_numbers[prefixes]
-        item["used_conditions"] = [grammatical_sentences[idx][1] for idx in prefixes]
+        item["used_item_numbers"] = gr_numbers[prefixes]
+        item["used_conditions"] = [gr_sentences[idx][1] for idx in prefixes]
 
         item["conditions"]["content"] = [
             regions_to_string(regions) for regions in item["conditions"]["regions"]]
@@ -143,6 +177,8 @@ def main(args):
     print("Running with device: ", args.device)
 
     suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)["test"]
+    prefix_suite = None if args.prefix_suite is None else \
+        datasets.load_dataset("cpllab/syntaxgym", args.prefix_suite)["test"]
 
     # TODO generalize
     grammatical_conditions = {
@@ -174,12 +210,15 @@ def main(args):
     #       for region_number in item["conditions"]["regions"][0]["region_number"]}
     #      for item in expanded])
 
+    prefix_suite_name = args.prefix_suite if args.prefix_suite is not None else args.suite
+
     prediction_df = pd.DataFrame(
         result.prediction_results,
         columns=[f"prediction_{i}" for i in range(len(result.prediction_results[0]))])
     prediction_df["used_item_numbers"] = [" ".join(map(str, nums)) for nums in expanded["used_item_numbers"]]
     prediction_df["used_conditions"] = [" ".join(conds) for conds in expanded["used_conditions"]]
     prediction_df["prefix_length"] = expanded["prefix_length"]
+    prediction_df["prefix_suite"] = prefix_suite_name
     prediction_df.index = expanded["item_number"]
     prediction_df.index.name = "item_number"
     prediction_df.to_csv(args.output_file + ".predictions.csv")
@@ -189,6 +228,7 @@ def main(args):
     regions_df.index.name = "item_number"
     regions_df = regions_df.reset_index().melt(id_vars=["item_number"])
     regions_df["condition"], regions_df["region_number"] = regions_df["variable"].str
+    regions_df["prefix_suite"] = prefix_suite_name
     regions_df.drop("variable", axis=1, inplace=True)
     regions_df.to_csv(args.output_file + ".regions.csv", index=False)
 
@@ -196,6 +236,7 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--suite", default="number_prep")
+    parser.add_argument("--prefix_suite")
     parser.add_argument("--target-length", type=int, default=40)
     parser.add_argument("--target-size", type=int, default=1000)
     parser.add_argument("-m", "--model-id", default="gpt2")
