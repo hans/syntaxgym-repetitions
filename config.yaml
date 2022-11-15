@@ -1,0 +1,31 @@
+prefixing:
+  target_length: 500
+  target_size: 2000
+
+suites:
+  - number_prep
+  - number_src
+  - number_orc
+  - reflexive_src_fem
+  - reflexive_src_masc
+  - reflexive_orc_fem
+  - reflexive_orc_masc
+  - reflexive_prep_fem
+  - reflexive_prep_masc
+  - subordination_src-src
+  - subordination_orc-orc
+  - subordination_pp-pp
+  - mvrr
+  - mvrr_mod
+  - npi_orc_any
+  - npi_orc_ever
+  - npi_src_any
+  - npi_src_ever
+  - npz_obj
+  - npz_obj_mod
+  - fgd_pp
+  - fgd_subject
+  - fgd_object
+
+models:
+  - gpt2
