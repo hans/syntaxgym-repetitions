@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from copy import deepcopy
 import itertools
+from pathlib import Path
 import re
 from readline import get_history_length
 from typing import Optional, List, Tuple, Dict, Any
@@ -216,7 +217,7 @@ def main(args):
     prediction_df["prefix_suite"] = prefix_suite_name
     prediction_df.index = expanded["item_number"]
     prediction_df.index.name = "item_number"
-    prediction_df.to_csv(f"{args.output_file}.predictions.csv")
+    prediction_df.to_csv(args.output_dir / "predictions.csv")
 
     regions_df = pd.DataFrame(result.region_totals)
     regions_df.index = expanded["item_number"]
@@ -225,7 +226,7 @@ def main(args):
     regions_df["condition"], regions_df["region_number"] = regions_df["variable"].str
     regions_df["prefix_suite"] = prefix_suite_name
     regions_df.drop("variable", axis=1, inplace=True)
-    regions_df.to_csv(f"{args.output_file}.regions.csv", index=False)
+    regions_df.to_csv(args.output_dir / "regions.csv", index=False)
 
 
 if __name__ == "__main__":
@@ -235,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument("--target-length", type=int, default=40)
     parser.add_argument("--target-size", type=int, default=1000)
     parser.add_argument("-m", "--model-id", default="gpt2")
-    parser.add_argument("-o", "--output-file", required=True)
+    parser.add_argument("-o", "--output_dir", type=Path, required=True)
     parser.add_argument("-d", "--device", default="gpu" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 

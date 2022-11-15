@@ -13,10 +13,12 @@ rule evaluate_prefixes:
 
     shell:
         """
+        mkdir -p {output}
+
         python analyze_repetitions.py \
             --suite {wildcards.suite} \
             --prefix_suite {wildcards.prefix_suite} \
-            --output-file {wildcards.suite}.{wildcards.prefix_suite} \
+            --o {output} \
             --target-length {config[prefixing][target_length]} \
             --target-size {config[prefixing][target_size]} \
             --model-id {wildcards.model} \
