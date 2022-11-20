@@ -1,15 +1,19 @@
 configfile: "config.yaml"
 
 
+wildcard_constraints:
+    prefix_type = "grammatical|ungrammatical"
+
+
 rule all:
     input:
-        expand("output/{model}/{suite}/{prefix_suite}",
-               model=config["models"], suite=config["suites"],
-               prefix_suite=config["suites"])
+        expand("output/{model}/{prefix_type}/{suite}/{prefix_suite}",
+               model=config["models"], prefix_type=["grammatical", "ungrammatical"],
+               suite=config["suites"], prefix_suite=config["suites"])
 
 rule evaluate_prefixes:
     output:
-        directory("output/{model}/{suite}/{prefix_suite}")
+        directory("output/{model}/{prefix_type}/{suite}/{prefix_suite}")
 
     shell:
         """
@@ -18,7 +22,8 @@ rule evaluate_prefixes:
         python analyze_repetitions.py \
             --suite {wildcards.suite} \
             --prefix_suite {wildcards.prefix_suite} \
-            --o {output} \
+            --prefix_type {wildcards.prefix_type} \
+            -o {output} \
             --target-length {config[prefixing][target_length]} \
             --target-size {config[prefixing][target_size]} \
             --model-id {wildcards.model} \

@@ -28,42 +28,41 @@ def regions_to_string(regions):
 ItemNumber = int
 ConditionName = str
 
-def get_grammatical_sentences(suite: datasets.Dataset,
-                              grammatical_conditions: List[str],
-                              ) -> Tuple[np.ndarray,
-                                         List[Tuple[ItemNumber, ConditionName, str]],
-                                         np.ndarray]:
-    condition_names = suite[0]["conditions"]["condition_name"]
-
-    # Retrieve all grammatical sentences that could participate in prefix.
-    grammatical_sentences = []
-    grammatical_sentence_item_numbers = []
+def get_prefix_sentences(suite: datasets.Dataset,
+                         prefix_conditions: List[str],
+                         ) -> Tuple[np.ndarray,
+                                     List[Tuple[ItemNumber, ConditionName, str]],
+                                     np.ndarray]:
+    # Retrieve all sentences from the given `prefix_conditions`
+    # that could participate in prefix.
+    prefix_sentences = []
+    prefix_sentence_item_numbers = []
     for item in suite:
         sentence_map = dict(zip(item["conditions"]["condition_name"],
                                 item["conditions"]["content"]))
-        for cond in grammatical_conditions:
-            grammatical_sentences.append((item["item_number"], cond, sentence_map[cond]))
-            grammatical_sentence_item_numbers.append(item["item_number"])
+        for cond in prefix_conditions:
+            prefix_sentences.append((item["item_number"], cond, sentence_map[cond]))
+            prefix_sentence_item_numbers.append(item["item_number"])
 
-    grammatical_sentence_item_numbers = np.array(grammatical_sentence_item_numbers)
-    grammatical_sentence_lengths = np.array([
-        sentence.count(" ") + 1 for _, _, sentence in grammatical_sentences])
+    prefix_sentence_item_numbers = np.array(prefix_sentence_item_numbers)
+    prefix_sentence_lengths = np.array([
+        sentence.count(" ") + 1 for _, _, sentence in prefix_sentences])
 
-    return (grammatical_sentence_item_numbers,
-            grammatical_sentences,
-            grammatical_sentence_lengths)
+    return (prefix_sentence_item_numbers,
+            prefix_sentences,
+            prefix_sentence_lengths)
 
 
 def expand_suite(suite: datasets.Dataset,
                  target_length: int,
-                 grammatical_conditions: List[str],
-                 ungrammatical_conditions: List[str],
+                 prefix_conditions: List[str],
                  other_suite: Optional[datasets.Dataset] = None,
-                 other_grammatical_conditions: Optional[List[str]] = None,
+                 other_prefix_conditions: Optional[List[str]] = None,
                  target_size=1000):
     """
-    Expand the examples in an item to contain prefixes consisting of grammatical sentences
-    from other items from `other_suite`, or the same suite if `other_suite` is not specified.
+    Expand the examples in an item to contain prefixes consisting of sentences from
+    `other_suite` in conditions `other_prefix_conditions`, or the same suite if
+    `other_suite` is not specified.
     Expand until all inputs under `target_length` tokens (based on whitespace split) are
     generated.
 
@@ -73,15 +72,19 @@ def expand_suite(suite: datasets.Dataset,
     if other_suite is None:
         expanding_self = True
         other_suite = suite
-        other_grammatical_conditions = grammatical_conditions
+
+        # NB it is possible that we are expanding the same suite, but with different
+        # prefix conditions. Avoid clobbering such params
+        if other_prefix_conditions is None:
+            other_prefix_conditions = prefix_conditions
     else:
         expanding_self = False
-        assert other_grammatical_conditions is not None, "Must specify grammatical conditions for other suite."
-    gr_numbers, gr_sentences, gr_lengths = get_grammatical_sentences(
-        other_suite, other_grammatical_conditions)
+        assert other_prefix_conditions is not None, "Must specify prefix conditions for other suite."
+    pr_numbers, pr_sentences, pr_lengths = get_prefix_sentences(
+        other_suite, other_prefix_conditions)
 
     # About many prefixes will we need to reach target_length?
-    num_prefixes = int(np.ceil(target_length / gr_lengths.mean()))
+    num_prefixes = int(np.ceil(target_length / pr_lengths.mean()))
     max_possible_prefixes = len(other_suite) * 2 - 1
     if num_prefixes > max_possible_prefixes:
         warnings.warn(f"{num_prefixes} prefixes required to reach target length {target_length} "
@@ -101,12 +104,12 @@ def expand_suite(suite: datasets.Dataset,
         for item_idx in item_sample:
             if expanding_self:
                 # Make sure we don't draw prefix sentences from the current item.
-                possible_prefixes_mask = gr_numbers != item_idx
+                possible_prefixes_mask = pr_numbers != item_idx
                 if possible_prefixes_mask.sum() < num_prefixes_i:
                     raise RuntimeError(f"Not enough unique prefix items to make {num_prefixes_i} prefixes.")
                 candidate_prefix_items = np.where(possible_prefixes_mask)[0]
             else:
-                candidate_prefix_items = np.arange(len(gr_sentences))
+                candidate_prefix_items = np.arange(len(pr_sentences))
 
             prefixes = np.random.choice(candidate_prefix_items, size=num_prefixes_i, replace=False)
             results.append((prefixes, int(item_idx)))
@@ -152,13 +155,13 @@ def expand_suite(suite: datasets.Dataset,
         item["item_number"] = acc + 1
         acc += 1
 
-        prefix_str = ". ".join([gr_sentences[idx][2] for idx in prefixes]) + "."
+        prefix_str = ". ".join([pr_sentences[idx][2] for idx in prefixes]) + "."
         for cond_regions in item["conditions"]["regions"]:
             cond_regions["content"][0] = prefix_str
 
         item["prefix_length"] = len(prefix_str.split(" "))
-        item["used_item_numbers"] = gr_numbers[prefixes]
-        item["used_conditions"] = [gr_sentences[idx][1] for idx in prefixes]
+        item["used_item_numbers"] = pr_numbers[prefixes]
+        item["used_conditions"] = [pr_sentences[idx][1] for idx in prefixes]
 
         item["conditions"]["content"] = [
             regions_to_string(regions) for regions in item["conditions"]["regions"]]
@@ -178,25 +181,40 @@ def main(args):
     print("Running with device: ", args.device)
 
     suite = datasets.load_dataset("cpllab/syntaxgym", args.suite)["test"]
-    prefix_suite = None if args.prefix_suite is None else \
-        datasets.load_dataset("cpllab/syntaxgym", args.prefix_suite)["test"]
+    prefix_suite_name = args.suite if args.prefix_suite is None else args.prefix_suite
+    prefix_suite = None if prefix_suite_name == args.suite else \
+        datasets.load_dataset("cpllab/syntaxgym", prefix_suite_name)["test"]
 
     # TODO generalize
-    grammatical_conditions = {
-        "number": ["match_sing", "match_plural"],
-        "reflexive": ["match_sing", "match_plural"],
-        "subordination": ["no-sub_no-matrix", "sub_matrix"],
-        "mvrr": ["reduced_ambig", "unreduced_ambig", "reduced_unambig", "unreduced_unambig"],  # all are grammatical!
-        "npi": ["neg_pos", "neg_neg"],
-        "npz": ["no-obj_comma", "obj_no-comma", "no-obj_no-comma", "obj_comma"],  # all are grammatical!
-        "fgd": ["that_nogap", "what_gap"],
+    suite_conditions = {
+        "grammatical": {
+            "number": ["match_sing", "match_plural"],
+            "reflexive": ["match_sing", "match_plural"],
+            "subordination": ["no-sub_no-matrix", "sub_matrix"],
+            "mvrr": ["reduced_ambig", "unreduced_ambig", "reduced_unambig", "unreduced_unambig"],  # all are grammatical!
+            "npi": ["neg_pos", "neg_neg"],
+            "npz": ["no-obj_comma", "obj_no-comma", "no-obj_no-comma", "obj_comma"],  # all are grammatical!
+            "fgd": ["that_nogap", "what_gap"],
+        },
+        "ungrammatical": {
+            "number": ["mismatch_sing", "mismatch_plural"],
+            "reflexive": ["mismatch_sing", "mismatch_plural"],
+            "subordination": ["sub_no-matrix", "no-sub_matrix"],
+            "mvrr": [],
+            "npi": ["pos_neg", "pos_pos"],
+            "npz": [],
+            "fgd": ["that_gap", "what_nogap"],
+        }
     }
-    grammatical_conditions_suite = grammatical_conditions[args.suite.split("_")[0]]
-    grammatical_conditions_prefix_suite = None if args.prefix_suite is None else \
-        grammatical_conditions[args.prefix_suite.split("_")[0]]
 
-    expanded = expand_suite(suite, args.target_length, grammatical_conditions_suite, None,
-                            other_suite=prefix_suite, other_grammatical_conditions=grammatical_conditions_prefix_suite,
+    conditions_suite = suite_conditions[args.prefix_type][args.suite.split("_")[0]]
+    conditions_prefix_suite = suite_conditions[args.prefix_type][prefix_suite_name.split("_")[0]]
+
+    if not conditions_prefix_suite:
+        raise ValueError("Missing conditions for the given prefix type and prefix suite. Stop.")
+
+    expanded = expand_suite(suite, args.target_length, conditions_suite,
+                            other_suite=prefix_suite, other_prefix_conditions=conditions_prefix_suite,
                             target_size=args.target_size)
 
     # The input to the metric needs to match the expected feature spec.
@@ -233,6 +251,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--suite", default="number_prep")
     parser.add_argument("--prefix_suite")
+    parser.add_argument("--prefix_type", choices=["grammatical", "ungrammatical"])
     parser.add_argument("--target-length", type=int, default=40)
     parser.add_argument("--target-size", type=int, default=1000)
     parser.add_argument("-m", "--model-id", default="gpt2")
