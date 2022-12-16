@@ -45,17 +45,20 @@ rule evaluate_prefixes:
 
 rule evaluate_fixed_prefixes:
     resources:
-        mem_mb = 10000
+        mem_mb = 32000
 
     input:
         prefix_file = "prefixes/{prefix_source}.json"
 
     output:
-        directory("output/{model}/fixed/{suite}/{prefix_source}")
+        predictions = "output/{model}/fixed/{suite}/{prefix_source}/predictions.csv",
+        regions = "output/{model}/fixed/{suite}/{prefix_source}/regions.csv"
 
-    shell:
-        """
-        mkdir -p {output}
+    run:
+        outdir = Path(output.predictions).parent
+        
+        shell("""
+        mkdir -p {outdir}
 
         bash -c '
             . $HOME/.bashrc # if not loaded automatically
@@ -64,7 +67,7 @@ rule evaluate_fixed_prefixes:
             --suite {wildcards.suite} \
             --prefix_file {input.prefix_file} \
             --prefix_label {wildcards.prefix_source} \
-            -o {output} \
+            -o {outdir} \
             --target-lengths 20,100,200,300,400,500,600 \
             --target-size {config[prefixing][target_size]} \
             --model-id {wildcards.model} \
@@ -73,4 +76,4 @@ rule evaluate_fixed_prefixes:
 
         # Remove dumped core :(
         rm -f core*
-        """
+        """)
